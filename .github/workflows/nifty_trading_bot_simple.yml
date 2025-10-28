@@ -53,17 +53,12 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip'
     
     - name: Install dependencies
       if: steps.check_weekday.outputs.should_run == 'true'
       run: |
         python -m pip install --upgrade pip
         pip install smartapi-python pyotp pytz requests
-        
-        if [ -f requirements.txt ]; then
-          pip install -r requirements.txt
-        fi
     
     - name: Run Trading Bot (Continuous Loop - Like VSCode)
       if: steps.check_weekday.outputs.should_run == 'true'
@@ -83,20 +78,31 @@ jobs:
         echo "Current IST Time: $(TZ=Asia/Kolkata date '+%Y-%m-%d %H:%M:%S %Z')"
         echo ""
         
+        # Check if optimized_nifty_signal_monitor.py exists
+        if [ -f "optimized_nifty_signal_monitor.py" ]; then
+          SCRIPT_NAME="optimized_nifty_signal_monitor.py"
+        else
+          echo "⚠️ optimized_nifty_signal_monitor.py not found, listing files:"
+          ls -la
+          echo ""
+          echo "❌ Please ensure your Python script is in the repository root"
+          exit 1
+        fi
+        
         # Replace hardcoded credentials with environment variables
-        sed -i "s/API_KEY = \".*\"/API_KEY = \"$API_KEY\"/" optimized_nifty_signal_monitor.py
-        sed -i "s/CLIENT_CODE = \".*\"/CLIENT_CODE = \"$CLIENT_CODE\"/" optimized_nifty_signal_monitor.py
-        sed -i "s/PASSWORD = \".*\"/PASSWORD = \"$PASSWORD\"/" optimized_nifty_signal_monitor.py
-        sed -i "s/TOTP_SECRET = \".*\"/TOTP_SECRET = \"$TOTP_SECRET\"/" optimized_nifty_signal_monitor.py
-        sed -i "s/TELEGRAM_TOKEN = \".*\"/TELEGRAM_TOKEN = \"$TELEGRAM_TOKEN\"/" optimized_nifty_signal_monitor.py
-        sed -i "s/TELEGRAM_CHAT_ID = \".*\"/TELEGRAM_CHAT_ID = \"$TELEGRAM_CHAT_ID\"/" optimized_nifty_signal_monitor.py
+        sed -i "s/API_KEY = \".*\"/API_KEY = \"$API_KEY\"/" $SCRIPT_NAME
+        sed -i "s/CLIENT_CODE = \".*\"/CLIENT_CODE = \"$CLIENT_CODE\"/" $SCRIPT_NAME
+        sed -i "s/PASSWORD = \".*\"/PASSWORD = \"$PASSWORD\"/" $SCRIPT_NAME
+        sed -i "s/TOTP_SECRET = \".*\"/TOTP_SECRET = \"$TOTP_SECRET\"/" $SCRIPT_NAME
+        sed -i "s/TELEGRAM_TOKEN = \".*\"/TELEGRAM_TOKEN = \"$TELEGRAM_TOKEN\"/" $SCRIPT_NAME
+        sed -i "s/TELEGRAM_CHAT_ID = \".*\"/TELEGRAM_CHAT_ID = \"$TELEGRAM_CHAT_ID\"/" $SCRIPT_NAME
         
         echo "Starting bot with 3-hour timeout..."
         echo "Your while True loop will run continuously!"
         echo ""
         
         # Run your script - it will loop continuously for 3 hours
-        timeout 3h python optimized_nifty_signal_monitor.py || {
+        timeout 3h python $SCRIPT_NAME || {
           EXIT_CODE=$?
           if [ $EXIT_CODE -eq 124 ]; then
             echo ""
@@ -107,8 +113,9 @@ jobs:
           fi
         }
     
-    - name: Upload logs
+    - name: Upload logs (if they exist)
       if: always() && steps.check_weekday.outputs.should_run == 'true'
+      continue-on-error: true
       uses: actions/upload-artifact@v4
       with:
         name: trading-logs-${{ github.run_number }}
@@ -116,6 +123,7 @@ jobs:
           nifty_signals.log
           *.log
         retention-days: 30
+        if-no-files-found: warn
     
     - name: Summary
       if: always() && steps.check_weekday.outputs.should_run == 'true'
