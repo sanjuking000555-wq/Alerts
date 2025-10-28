@@ -1,0 +1,126 @@
+name: Nifty Signal Monitor (Continuous Loop - Like VSCode)
+
+on:
+  schedule:
+    # Trigger ONCE per day at 9:00 AM IST (3:30 AM UTC)
+    # Then your script runs continuously until 12:00 PM IST
+    - cron: '30 3 * * 1-5'  # 9:00 AM IST = 3:30 AM UTC, Monday-Friday
+  
+  workflow_dispatch:  # Allow manual trigger for testing
+
+env:
+  TZ: 'Asia/Kolkata'
+
+jobs:
+  run-trading-bot:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Check if within first 10 weekdays of month
+      id: check_weekday
+      run: |
+        export TZ=Asia/Kolkata
+        CURRENT_DAY=$(date +%d)
+        CURRENT_MONTH=$(date +%m)
+        CURRENT_YEAR=$(date +%Y)
+        
+        # Count weekdays from start of month to today
+        WEEKDAY_COUNT=0
+        for day in $(seq 1 $CURRENT_DAY); do
+          DATE_STR="$CURRENT_YEAR-$CURRENT_MONTH-$(printf '%02d' $day)"
+          DAY_OF_WEEK=$(date -d "$DATE_STR" +%u)
+          if [ $DAY_OF_WEEK -le 5 ]; then
+            WEEKDAY_COUNT=$((WEEKDAY_COUNT + 1))
+          fi
+        done
+        
+        echo "Current day: $CURRENT_DAY"
+        echo "Weekday count: $WEEKDAY_COUNT"
+        
+        if [ $WEEKDAY_COUNT -le 10 ]; then
+          echo "✅ Within first 10 weekdays (Weekday #$WEEKDAY_COUNT)"
+          echo "should_run=true" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Beyond first 10 weekdays (Weekday #$WEEKDAY_COUNT)"
+          echo "should_run=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Set up Python 3.11
+      if: steps.check_weekday.outputs.should_run == 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      if: steps.check_weekday.outputs.should_run == 'true'
+      run: |
+        python -m pip install --upgrade pip
+        pip install smartapi-python pyotp pytz requests
+        
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
+    
+    - name: Run Trading Bot (Continuous Loop - Like VSCode)
+      if: steps.check_weekday.outputs.should_run == 'true'
+      env:
+        API_KEY: ${{ secrets.ANGEL_API_KEY }}
+        CLIENT_CODE: ${{ secrets.ANGEL_CLIENT_CODE }}
+        PASSWORD: ${{ secrets.ANGEL_PASSWORD }}
+        TOTP_SECRET: ${{ secrets.ANGEL_TOTP_SECRET }}
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: |
+        echo "🚀 Starting Nifty Signal Monitor in CONTINUOUS LOOP MODE"
+        echo "This runs EXACTLY like VSCode - your while True loop!"
+        echo "Will run from 9:00 AM to 12:00 PM IST (3 hours)"
+        echo "Your script checks time every second, does work every 5 minutes"
+        echo ""
+        echo "Current IST Time: $(TZ=Asia/Kolkata date '+%Y-%m-%d %H:%M:%S %Z')"
+        echo ""
+        
+        # Replace hardcoded credentials with environment variables
+        sed -i "s/API_KEY = \".*\"/API_KEY = \"$API_KEY\"/" optimized_nifty_signal_monitor.py
+        sed -i "s/CLIENT_CODE = \".*\"/CLIENT_CODE = \"$CLIENT_CODE\"/" optimized_nifty_signal_monitor.py
+        sed -i "s/PASSWORD = \".*\"/PASSWORD = \"$PASSWORD\"/" optimized_nifty_signal_monitor.py
+        sed -i "s/TOTP_SECRET = \".*\"/TOTP_SECRET = \"$TOTP_SECRET\"/" optimized_nifty_signal_monitor.py
+        sed -i "s/TELEGRAM_TOKEN = \".*\"/TELEGRAM_TOKEN = \"$TELEGRAM_TOKEN\"/" optimized_nifty_signal_monitor.py
+        sed -i "s/TELEGRAM_CHAT_ID = \".*\"/TELEGRAM_CHAT_ID = \"$TELEGRAM_CHAT_ID\"/" optimized_nifty_signal_monitor.py
+        
+        echo "Starting bot with 3-hour timeout..."
+        echo "Your while True loop will run continuously!"
+        echo ""
+        
+        # Run your script - it will loop continuously for 3 hours
+        timeout 3h python optimized_nifty_signal_monitor.py || {
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -eq 124 ]; then
+            echo ""
+            echo "✅ Bot completed 3-hour continuous run successfully"
+          else
+            echo ""
+            echo "⚠️ Bot stopped with exit code: $EXIT_CODE"
+          fi
+        }
+    
+    - name: Upload logs
+      if: always() && steps.check_weekday.outputs.should_run == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: trading-logs-${{ github.run_number }}
+        path: |
+          nifty_signals.log
+          *.log
+        retention-days: 30
+    
+    - name: Summary
+      if: always() && steps.check_weekday.outputs.should_run == 'true'
+      run: |
+        echo "════════════════════════════════════════════════"
+        echo "Continuous loop execution completed"
+        echo "Finished at: $(TZ=Asia/Kolkata date '+%Y-%m-%d %H:%M:%S %Z')"
+        echo "════════════════════════════════════════════════"
