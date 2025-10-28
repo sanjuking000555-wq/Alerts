@@ -1,4 +1,4 @@
-name: Nifty Signal Monitor (Continuous Loop - Like VSCode)
+name: Nifty Signal Monitor (Weekdays 11-20)
 
 on:
   schedule:
@@ -19,7 +19,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    - name: Check if within first 10 weekdays of month
+    - name: Check if within weekdays 11-20 of month
       id: check_weekday
       run: |
         export TZ=Asia/Kolkata
@@ -40,11 +40,11 @@ jobs:
         echo "Current day: $CURRENT_DAY"
         echo "Weekday count: $WEEKDAY_COUNT"
         
-        if [ $WEEKDAY_COUNT -le 10 ]; then
-          echo "✅ Within first 10 weekdays (Weekday #$WEEKDAY_COUNT)"
+        if [ $WEEKDAY_COUNT -ge 11 ] && [ $WEEKDAY_COUNT -le 20 ]; then
+          echo "✅ Within weekdays 11-20 (Weekday #$WEEKDAY_COUNT)"
           echo "should_run=true" >> $GITHUB_OUTPUT
         else
-          echo "❌ Beyond first 10 weekdays (Weekday #$WEEKDAY_COUNT)"
+          echo "❌ Outside weekdays 11-20 range (Weekday #$WEEKDAY_COUNT)"
           echo "should_run=false" >> $GITHUB_OUTPUT
         fi
     
